@@ -21,7 +21,9 @@ class Curl {
     protected $headers = array();   // Populates extra HTTP headers
     public $error_code;             // Error code returned as an int
     public $error_string;           // Error message returned as a string
-    public $info;                   // Returned after request (elapsed time, etc)
+    public $info; 
+    public $header;
+    public $body;                  // Returned after request (elapsed time, etc)
 
     function __construct($url = '')
     {
@@ -57,7 +59,7 @@ class Curl {
         if ($method === 'get')
         {
             // If a URL is provided, create new session
-            $this->create($url.($params ? '?'.http_build_query($params, NULL, '&') : ''));
+            $this->create($url.($params ? '?'.$this->parseURLString($params) : ''));
         }
 
         else
@@ -109,13 +111,25 @@ class Curl {
      * ADVANCED METHODS
      * Use these methods to build up more complex queries
      * ================================================================================= */
-
+    private function parseURLString($params) {
+        $str = '';
+        foreach($params as $param =>$val) {
+            if(is_array($val)) {
+                foreach($val as $subval) {
+                    $str .= urlencode($param) . '=' . urlencode($subval) .'&';
+                }
+            } else {
+                $str .= urlencode($param) . '=' . urlencode($val) .'&';
+            }
+        }
+        return substr($str, 0, strlen($str) - 1);
+    }
     public function post($params = array(), $options = array())
     {
         // If its an array (instead of a query string) then format it correctly
         if (is_array($params))
         {
-            $params = http_build_query($params, NULL, '&');
+            $params = $this->parseURLString($params);
         }
 
         // Add in the specific options provided
@@ -132,7 +146,7 @@ class Curl {
         // If its an array (instead of a query string) then format it correctly
         if (is_array($params))
         {
-            $params = http_build_query($params, NULL, '&');
+            $params = $this->parseURLString($params);
         }
 
         // Add in the specific options provided
@@ -150,7 +164,7 @@ class Curl {
         // If its an array (instead of a query string) then format it correctly
         if (is_array($params))
         {
-            $params = http_build_query($params, NULL, '&');
+            $params = $this->parseURLString($params);
         }
 
         // Add in the specific options provided
@@ -165,7 +179,7 @@ class Curl {
     {
         if (is_array($params))
         {
-            $params = http_build_query($params, NULL, '&');
+            $params = $this->parseURLString($params);
         }
 
         $this->option(CURLOPT_COOKIE, $params);
@@ -296,9 +310,16 @@ class Curl {
 
         $this->options();
 
+        curl_setopt($this->session, CURLOPT_RETURNTRANSFER, 1);
+        curl_setopt($this->session, CURLOPT_VERBOSE, 1);
+        curl_setopt($this->session, CURLOPT_HEADER, 1);
         // Execute the request & and hide all output
         $this->response = curl_exec($this->session);
         $this->info = curl_getinfo($this->session);
+
+        $header_size = curl_getinfo($this->session, CURLINFO_HEADER_SIZE);
+        $this->header = substr($this->response, 0, $header_size);
+        $this->body = substr($this->response, $header_size);
 
         // Request failed
         if ($this->response === FALSE)
@@ -319,7 +340,7 @@ class Curl {
         else
         {
             curl_close($this->session);
-            $this->last_response = $this->response;
+            $this->last_response = $this->body;
             $this->set_defaults();
             return $this->last_response;
         }
